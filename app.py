@@ -11,9 +11,25 @@ import requests
 
 # Initialize Flask app
 app = Flask(__name__)
-app.secret_key = os.urandom(24).hex()  # 🔐 Generate strong random secret key
-app.config['UPLOAD_FOLDER'] = 'static/images'        # Where uploaded images will be stored
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+
+# Use environment variable for secret key in production, fallback for development
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
+
+# Configure upload folder - use absolute path for production
+basedir = os.path.abspath(os.path.dirname(__file__))
+app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', os.path.join(basedir, 'static', 'images'))
+
+# Database configuration for production - Use Render's persistent disk if available
+if os.environ.get('RENDER'):
+    # On Render, use persistent disk
+    database_path = '/data/blog.db'
+    # Ensure the directory exists
+    os.makedirs('/data', exist_ok=True)
+else:
+    # Local development
+    database_path = os.path.join(basedir, 'database', 'blog.db')
+
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'  # Set to True in production with HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
@@ -102,7 +118,9 @@ def get_db():
     """Open a new database connection per request."""
     db = getattr(g, '_database', None)
     if db is None:
-        db = g._database = sqlite3.connect('database/blog.db')
+        # Ensure database directory exists
+        os.makedirs(os.path.dirname(database_path), exist_ok=True)
+        db = g._database = sqlite3.connect(database_path)
         db.row_factory = sqlite3.Row   # allows accessing columns by name
     return db
 
@@ -238,10 +256,15 @@ def login_required(view):
         
         # Check if session is expired
         if 'last_activity' in session:
-            if datetime.now() - datetime.fromisoformat(session['last_activity']) > app.config['PERMANENT_SESSION_LIFETIME']:
-                session.clear()
-                flash('Your session has expired. Please log in again.', 'warning')
-                return redirect(url_for('login'))
+            try:
+                last_activity = datetime.fromisoformat(session['last_activity'])
+                if datetime.now() - last_activity > app.config['PERMANENT_SESSION_LIFETIME']:
+                    session.clear()
+                    flash('Your session has expired. Please log in again.', 'warning')
+                    return redirect(url_for('login'))
+            except (ValueError, TypeError):
+                # If last_activity is invalid, just update it
+                pass
         
         # Update last activity
         session['last_activity'] = datetime.now().isoformat()
@@ -304,7 +327,7 @@ def contact():
         else:
             ip_address = request.remote_addr
             
-        user_agent = request.user_agent.string
+        user_agent = request.user_agent.string if request.user_agent else ''
         
         # Get location from IP
         location = get_ip_location(ip_address)
@@ -378,11 +401,16 @@ def login():
         user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         
         if user and user['locked_until']:
-            locked_until = datetime.fromisoformat(user['locked_until'])
-            if datetime.now() < locked_until:
-                minutes_left = int((locked_until - datetime.now()).total_seconds() / 60)
-                flash(f'Account locked. Try again in {minutes_left} minutes.', 'error')
-                return render_template('admin/login.html')
+            try:
+                locked_until = datetime.fromisoformat(user['locked_until'])
+                if datetime.now() < locked_until:
+                    minutes_left = int((locked_until - datetime.now()).total_seconds() / 60)
+                    flash(f'Account locked. Try again in {minutes_left} minutes.', 'error')
+                    return render_template('admin/login.html')
+            except (ValueError, TypeError):
+                # If locked_until is invalid, clear it
+                db.execute('UPDATE users SET locked_until = NULL WHERE id = ?', (user['id'],))
+                db.commit()
         
         # Verify credentials
         if user and check_password_hash(user['password_hash'], password):
@@ -413,7 +441,7 @@ def login():
                 if failed >= 5:  # Lock after 5 failed attempts
                     lock_time = datetime.now() + timedelta(minutes=15)
                     db.execute('UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?',
-                              (failed, lock_time, user['id']))
+                              (failed, lock_time.isoformat(), user['id']))
                     flash('Too many failed attempts. Account locked for 15 minutes.', 'error')
                 else:
                     db.execute('UPDATE users SET failed_attempts = ? WHERE id = ?',
@@ -503,7 +531,6 @@ def admin_dashboard():
     
     return render_template('admin/dashboard.html', posts=posts, unread_count=unread_count, user=user)
 
-# ===== UPDATED: create_post with excerpt =====
 @app.route('/admin/create', methods=['GET', 'POST'])
 @login_required
 def create_post():
@@ -511,14 +538,14 @@ def create_post():
     if request.method == 'POST':
         title = request.form['title']
         content = request.form['content']
-        excerpt = request.form.get('excerpt', '')  # NEW: Get excerpt from form
+        excerpt = request.form.get('excerpt', '')
         category = request.form['category']
         image = request.files['image']
 
         # If no excerpt provided, generate one from content
         if not excerpt.strip():
             # Remove HTML tags and truncate
-            excerpt = re.sub('<[^<]+?>', '', content)  # Remove HTML tags
+            excerpt = re.sub('<[^<]+?>', '', content)
             excerpt = excerpt[:150] + '...' if len(excerpt) > 150 else excerpt
 
         filename = None
@@ -527,7 +554,6 @@ def create_post():
             image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
         db = get_db()
-        # UPDATED: Include excerpt in INSERT
         db.execute('''
             INSERT INTO posts (title, content, excerpt, category, image_filename)
             VALUES (?, ?, ?, ?, ?)
@@ -540,7 +566,6 @@ def create_post():
 
     return render_template('admin/edit_post.html', post=None)
 
-# ===== UPDATED: edit_post with excerpt =====
 @app.route('/admin/edit/<int:post_id>', methods=['GET', 'POST'])
 @login_required
 def edit_post(post_id):
@@ -553,7 +578,7 @@ def edit_post(post_id):
     if request.method == 'POST':
         title = request.form['title']
         content = request.form['content']
-        excerpt = request.form.get('excerpt', '')  # NEW: Get excerpt from form
+        excerpt = request.form.get('excerpt', '')
         category = request.form['category']
         image = request.files['image']
 
@@ -568,14 +593,14 @@ def edit_post(post_id):
             # Delete old image if it exists
             if filename:
                 try:
-                    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    old_file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    if os.path.exists(old_file_path):
+                        os.remove(old_file_path)
                 except OSError:
                     pass
             filename = secure_filename(image.filename)
             image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-        db = get_db()
-        # UPDATED: Include excerpt in UPDATE
         db.execute('''
             UPDATE posts
             SET title = ?, content = ?, excerpt = ?, category = ?, image_filename = ?
@@ -600,7 +625,9 @@ def delete_post(post_id):
         # Delete image if exists
         if post['image_filename']:
             try:
-                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], post['image_filename']))
+                image_path = os.path.join(app.config['UPLOAD_FOLDER'], post['image_filename'])
+                if os.path.exists(image_path):
+                    os.remove(image_path)
             except OSError:
                 pass
         
@@ -679,22 +706,13 @@ if __name__ == '__main__':
     # Create the upload folder if it doesn't exist
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     
-    # Setup logging for production
-    if not app.debug:
-        import logging
-        from logging.handlers import RotatingFileHandler
-        
-        file_handler = RotatingFileHandler('blog.log', maxBytes=10240, backupCount=10)
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-        ))
-        file_handler.setLevel(logging.INFO)
-        app.logger.addHandler(file_handler)
-        app.logger.setLevel(logging.INFO)
-        app.logger.info('Blog startup')
+    # Create database directory if it doesn't exist
+    os.makedirs(os.path.dirname(database_path), exist_ok=True)
     
-    # Run the app
-    # For development:
-    app.run(debug=True)
-    # For production, use:
-    # app.run(host='0.0.0.0', port=5000)
+    # Get port from environment variable for Render
+    port = int(os.environ.get('PORT', 5000))
+    
+    # Run the app - simplified for Render
+    # Render uses gunicorn, so this block is only for local development
+    debug_mode = os.environ.get('FLASK_ENV') != 'production'
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
