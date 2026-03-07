@@ -3,3 +3,4 @@ Werkzeug
 requests
 flask-limiter
 itsdangerous
+gunicorn
