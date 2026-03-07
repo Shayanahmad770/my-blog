@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Message - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .message-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .message-header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 20px;
+        }
+        .sender-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+        .info-item:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-sm);
+        }
+        .info-item .label {
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        .info-item .value {
+            font-size: 1.1rem;
+            font-weight: 500;
+            word-break: break-word;
+        }
+        .location-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            grid-column: span 2;
+        }
+        .location-info .label {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .location-info .value {
+            color: white;
+        }
+        .map-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 5px 15px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            transition: background 0.3s;
+        }
+        .map-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .message-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 20px;
+        }
+        .message-content h3 {
+            margin-bottom: 15px;
+            color: var(--primary-color);
+        }
+        .message-body {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .meta-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .meta-info p {
+            margin: 5px 0;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        .btn-sm {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .flag-icon {
+            font-size: 1.5rem;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        @media (max-width: 768px) {
+            .sender-info {
+                grid-template-columns: 1fr;
+            }
+            .location-info {
+                grid-column: span 1;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="container header-content">
+        <h1 class="logo">NextTech<span>Daily</span> Admin</h1>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('admin_dashboard') }}">Posts</a></li>
+                <li><a href="{{ url_for('admin_messages') }}">Messages</a></li>
+                <li><a href="{{ url_for('index') }}">View Site</a></li>
+                <li><a href="{{ url_for('logout') }}">Logout</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<main class="message-container">
+    <div class="message-header">
+        <h1>Message from {{ message.name }}</h1>
+        
+        <div class="sender-info">
+            <div class="info-item">
+                <div class="label">👤 Name</div>
+                <div class="value">{{ message.name }}</div>
+            </div>
+            <div class="info-item">
+                <div class="label">📧 Email</div>
+                <div class="value">{{ message.email }}</div>
+            </div>
+            <div class="info-item">
+                <div class="label">📅 Received</div>
+                <div class="value">{{ message.date }}</div>
+            </div>
+            <div class="info-item">
+                <div class="label">📌 Status</div>
+                <div class="value">
+                    {% if message.is_read %}
+                        <span class="badge badge-success">Read</span>
+                    {% else %}
+                        <span class="badge" style="background: #007bff; color: white;">New</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Location Information Section -->
+            {% if message.city and message.city != 'Unknown' and message.city != 'Error' %}
+                <div class="info-item location-info">
+                    <div class="label">📍 Location</div>
+                    <div class="value">
+                        <span class="flag-icon">🌍</span>
+                        <strong>{{ message.city }}</strong>, {{ message.region }}, {{ message.country }}
+                    </div>
+                    {% if message.lat and message.lat != 0 %}
+                        <a href="https://www.google.com/maps?q={{ message.lat }},{{ message.lon }}" 
+                           target="_blank" class="map-link">
+                            🗺️ View on Google Maps
+                        </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+            
+            <!-- ISP Information -->
+            {% if message.isp and message.isp != 'Unknown' and message.isp != 'Error' %}
+                <div class="info-item">
+                    <div class="label">🌐 Internet Provider</div>
+                    <div class="value">{{ message.isp }}</div>
+                </div>
+            {% endif %}
+            
+            <!-- IP Address -->
+            {% if message.ip_address %}
+                <div class="info-item">
+                    <div class="label">🔢 IP Address</div>
+                    <div class="value">{{ message.ip_address }}</div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="message-content">
+        <h3>📝 Message:</h3>
+        <div class="message-body">
+            {{ message.message }}
+        </div>
+        
+        <div class="meta-info">
+            <h4 style="margin-bottom: 10px;">Technical Details:</h4>
+            <p><strong>🖥️ Browser/Device:</strong> {{ message.user_agent or 'Not available' }}</p>
+            <p><strong>📱 Platform:</strong> 
+                {% if message.user_agent %}
+                    {% if 'Mobile' in message.user_agent %}
+                        Mobile Device 📱
+                    {% elif 'Windows' in message.user_agent %}
+                        Windows PC 💻
+                    {% elif 'Mac' in message.user_agent %}
+                        Mac 🍎
+                    {% elif 'Linux' in message.user_agent %}
+                        Linux 🐧
+                    {% else %}
+                        Unknown
+                    {% endif %}
+                {% else %}
+                    Not available
+                {% endif %}
+            </p>
+            
+            <!-- Summary Card -->
+            <div style="margin-top: 15px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+                <h4 style="color: #1976d2; margin-bottom: 10px;">📍 Location Summary:</h4>
+                {% if message.city and message.city != 'Unknown' and message.city != 'Error' %}
+                    <p><strong>City:</strong> {{ message.city }}</p>
+                    <p><strong>Region:</strong> {{ message.region }}</p>
+                    <p><strong>Country:</strong> {{ message.country }}</p>
+                    <p><strong>ISP:</strong> {{ message.isp or 'Not available' }}</p>
+                    <p><strong>IP Address:</strong> {{ message.ip_address }}</p>
+                {% else %}
+                    <p>Location information not available for this IP.</p>
+                    <p style="font-size: 0.9rem; color: #666;">
+                        Note: Localhost (127.0.0.1) and some IPs don't provide location data.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="actions">
+        <a href="mailto:{{ message.email }}?subject=Re: Your message to NextTechDaily" class="btn btn-primary">
+            ✉️ Reply via Email
+        </a>
+        <a href="{{ url_for('admin_messages') }}" class="btn btn-secondary">
+            ← Back to Messages
+        </a>
+        <form action="{{ url_for('delete_message', message_id=message.id) }}" method="POST" style="display:inline;">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this message?')">
+                🗑️ Delete
+            </button>
+        </form>
+    </div>
+</main>
+
+<footer>
+    <p>© 2026 NextTechDaily — Admin Panel</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if post %}Edit{% else %}Create{% endif %} Post - NextTechDaily Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- CKEditor CDN -->
+    <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
+    <style>
+        .admin-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+        .admin-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .form-group {
+            margin-bottom: 25px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="file"],
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        .form-group input[type="text"]:focus,
+        .form-group textarea:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 300px;
+        }
+        .form-group input[type="file"] {
+            padding: 8px;
+            border: 2px dashed #e0e0e0;
+            background: #f9f9f9;
+            cursor: pointer;
+        }
+        .form-group input[type="file"]:hover {
+            border-color: #667eea;
+            background: #f0f0f0;
+        }
+        
+        /* CKEditor Custom Styling */
+        .ck-editor__editable {
+            min-height: 400px !important;
+            max-height: 600px !important;
+        }
+        
+        /* Current Image Display */
+        .current-image {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .current-image p {
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #555;
+        }
+        .current-image img {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .image-info {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 10px;
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            font-weight: 600;
+            margin-right: 10px;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+            transform: translateY(-2px);
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+            transform: translateY(-2px);
+        }
+        
+        /* Toolbar Info */
+        .toolbar-info {
+            background: linear-gradient(135deg, #667eea10, #764ba210);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            border-left: 4px solid #667eea;
+            font-size: 14px;
+            color: #555;
+        }
+        .toolbar-info i {
+            font-style: normal;
+            background: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin: 0 3px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Required Field Indicator */
+        .required::after {
+            content: " *";
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        /* Help Text */
+        .help-text {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        /* Alert Messages */
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        
+        /* Danger Zone */
+        .danger-zone {
+            margin-top: 50px;
+            padding: 25px;
+            border: 2px solid #dc3545;
+            border-radius: 8px;
+            background: #fff8f8;
+        }
+        .danger-zone h3 {
+            color: #dc3545;
+            margin-bottom: 15px;
+        }
+        
+        @media (max-width: 768px) {
+            .admin-header {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+            }
+            .btn {
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="container header-content">
+        <h1 class="logo">NextTech<span>Daily</span> Admin</h1>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('index') }}">View Site</a></li>
+                <li><a href="{{ url_for('admin_dashboard') }}">Dashboard</a></li>
+                <li><a href="{{ url_for('admin_messages') }}">Messages</a></li>
+                <li><a href="{{ url_for('logout') }}">Logout</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<main class="admin-container">
+    <div class="admin-header">
+        <h1>{% if post %}✏️ Edit Post{% else %}📝 Create New Post{% endif %}</h1>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="toolbar-info">
+        <strong>✨ Rich Text Editor Enabled:</strong> 
+        Select text and use the toolbar above to format:
+        <i>H1</i> <i>H2</i> <i>H3</i> <i>Bold</i> <i>Italic</i> <i>Lists</i> <i>Links</i> and more!
+    </div>
+
+    <!-- PERMANENT FIX: Added novalidate to disable browser validation -->
+    <form method="POST" enctype="multipart/form-data" id="postForm" novalidate>
+        <!-- Title field -->
+        <div class="form-group">
+            <label for="title" class="required">Post Title</label>
+            <input type="text" id="title" name="title" 
+                   value="{{ post.title if post else '' }}" 
+                   required 
+                   placeholder="Enter an engaging title for your post"
+                   autofocus>
+        </div>
+
+        <!-- NEW: Add this excerpt field -->
+        <div class="form-group">
+            <label for="excerpt">Excerpt (Summary)</label>
+            <textarea id="excerpt" name="excerpt" rows="3" 
+              placeholder="Write a short summary of your post... (150-200 characters recommended)">{{ post.excerpt if post else '' }}</textarea>
+            <div class="help-text">
+                <strong>💡 What's this?</strong> This short summary appears on the homepage. 
+                If left empty, we'll use the first 150 characters of your content automatically.
+            </div>
+        </div>
+
+        <!-- Content field with CKEditor - NO required attribute -->
+        <div class="form-group">
+            <label for="content" class="required">Post Content</label>
+            <textarea id="content" name="content" placeholder="Write your amazing content here...">{{ post.content if post else '' }}</textarea>
+            <div class="help-text">Use the toolbar to format your text. Headings, lists, and links supported.</div>
+        </div>
+
+        <!-- Category field -->
+        <div class="form-group">
+            <label for="category" class="required">Category</label>
+            <input type="text" id="category" name="category" 
+                   value="{{ post.category if post else '' }}" 
+                   required 
+                   placeholder="e.g., Technology, Programming, AI, Web Development"
+                   list="category-suggestions">
+            <datalist id="category-suggestions">
+                <option value="Technology">
+                <option value="Programming">
+                <option value="Web Development">
+                <option value="Artificial Intelligence">
+                <option value="Tutorial">
+                <option value="News">
+            </datalist>
+        </div>
+
+        <!-- Image upload field -->
+        <div class="form-group">
+            <label for="image">Featured Image</label>
+            <input type="file" id="image" name="image" accept="image/png, image/jpeg, image/jpg, image/gif">
+            <div class="help-text">Allowed formats: PNG, JPG, JPEG, GIF. Max size: 16MB.</div>
+            
+            {% if post and post.image_filename %}
+                <div class="current-image">
+                    <p>📸 Current Featured Image:</p>
+                    <img src="{{ url_for('static', filename='images/' + post.image_filename) }}" 
+                         alt="{{ post.title }}">
+                    <div class="image-info">
+                        <strong>Filename:</strong> {{ post.image_filename }}<br>
+                        <strong>Note:</strong> Upload a new image to replace the current one.
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Form actions -->
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+                {% if post %}✏️ Update Post{% else %}📝 Create Post{% endif %}
+            </button>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+
+    {% if post %}
+        <!-- Danger Zone -->
+        <div class="danger-zone">
+            <h3>⚠️ Danger Zone</h3>
+            <p class="help-text">Once you delete a post, there is no going back. All content and images will be permanently removed.</p>
+            <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST" 
+                  onsubmit="return confirm('⚠️ Are you ABSOLUTELY sure you want to delete this post?\n\nTitle: {{ post.title }}\n\nThis action cannot be undone!');">
+                <button type="submit" class="btn btn-danger">🗑️ Delete Post Permanently</button>
+            </form>
+        </div>
+    {% endif %}
+</main>
+
+<footer>
+    <p>© 2026 NextTechDaily — {% if post %}Edit{% else %}Create{% endif %} Post</p>
+</footer>
+
+<!-- PERMANENT FIX: JavaScript validation -->
+<script>
+    let editorInstance;
+    
+    // Initialize CKEditor
+    ClassicEditor
+        .create(document.querySelector('#content'), {
+            toolbar: {
+                items: [
+                    'heading',
+                    '|',
+                    'bold',
+                    'italic',
+                    'underline',
+                    'strikethrough',
+                    '|',
+                    'bulletedList',
+                    'numberedList',
+                    '|',
+                    'alignment',
+                    'outdent',
+                    'indent',
+                    '|',
+                    'link',
+                    'blockQuote',
+                    'insertTable',
+                    'mediaEmbed',
+                    '|',
+                    'undo',
+                    'redo'
+                ]
+            },
+            heading: {
+                options: [
+                    { model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
+                    { model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
+                    { model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
+                    { model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' },
+                    { model: 'heading4', view: 'h4', title: 'Heading 4', class: 'ck-heading_heading4' },
+                    { model: 'heading5', view: 'h5', title: 'Heading 5', class: 'ck-heading_heading5' },
+                    { model: 'heading6', view: 'h6', title: 'Heading 6', class: 'ck-heading_heading6' }
+                ]
+            },
+            placeholder: 'Start writing your amazing blog post here...',
+        })
+        .then(editor => {
+            editorInstance = editor;
+            console.log('CKEditor initialized successfully');
+        })
+        .catch(error => {
+            console.error('Error initializing CKEditor:', error);
+            alert('Error loading editor. Please refresh the page.');
+        });
+    
+    // PERMANENT FIX: Custom validation that works with CKEditor
+    document.getElementById('postForm').addEventListener('submit', function(e) {
+        console.log('Form submission intercepted for validation');
+        
+        // Get form values
+        const title = document.getElementById('title').value.trim();
+        const category = document.getElementById('category').value.trim();
+        
+        // Get content from CKEditor
+        let content = '';
+        if (editorInstance) {
+            content = editorInstance.getData().trim();
+        } else {
+            // Fallback to textarea if editor not initialized
+            content = document.getElementById('content').value.trim();
+        }
+        
+        console.log('Validation check:', { 
+            title: title || 'EMPTY', 
+            contentLength: content.length,
+            category: category || 'EMPTY' 
+        });
+        
+        // Validate title
+        if (!title) {
+            e.preventDefault();
+            alert('Please enter a title for your post!');
+            document.getElementById('title').focus();
+            return false;
+        }
+        
+        // Validate content
+        if (!content) {
+            e.preventDefault();
+            alert('Please enter some content for your post!');
+            if (editorInstance) {
+                editorInstance.editing.view.focus();
+            }
+            return false;
+        }
+        
+        // Validate category
+        if (!category) {
+            e.preventDefault();
+            alert('Please enter a category for your post!');
+            document.getElementById('category').focus();
+            return false;
+        }
+        
+        // All validations passed
+        console.log('All validations passed, submitting form...');
+        
+        // Show loading state
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.innerHTML = '⏳ Saving...';
+        submitBtn.disabled = true;
+        
+        // Allow form to submit normally
+        return true;
+    });
+    
+    // Image validation
+    document.getElementById('image').addEventListener('change', function(e) {
+        if (this.files && this.files[0]) {
+            const file = this.files[0];
+            const fileSize = file.size / 1024 / 1024; // in MB
+            
+            if (fileSize > 16) {
+                alert('File size exceeds 16MB limit. Please choose a smaller image.');
+                this.value = '';
+            }
+            
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+            if (!validTypes.includes(file.type)) {
+                alert('Invalid file type. Please upload PNG, JPG, JPEG, or GIF.');
+                this.value = '';
+            }
+        }
+    });
+    
+    // Prevent double submission
+    let submitted = false;
+    document.getElementById('postForm').addEventListener('submit', function() {
+        if (submitted) {
+            e.preventDefault();
+            return false;
+        }
+        submitted = true;
+    });
+</script>
+
+</body>
+</html>

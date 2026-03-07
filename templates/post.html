@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Add this after your existing CSS link -->
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Primary Meta Tags -->
+    <title>{{ post.title }} - NextTechDaily</title>
+    <meta name="title" content="{{ post.title }} - NextTechDaily">
+    <meta name="description" content="{{ post.content[:160]|striptags }}...">
+    <meta name="keywords" content="{{ post.category }}, technology, programming, web development, tech blog">
+    <meta name="author" content="NextTechDaily">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:title" content="{{ post.title }}">
+    <meta property="og:description" content="{{ post.content[:160]|striptags }}...">
+    {% if post.image_filename %}
+        <meta property="og:image" content="{{ url_for('static', filename='images/' + post.image_filename, _external=True) }}">
+    {% else %}
+        <meta property="og:image" content="{{ url_for('static', filename='images/default-social.jpg', _external=True) }}">
+    {% endif %}
+    <meta property="article:published_time" content="{{ post.date }}">
+    <meta property="article:author" content="NextTechDaily">
+    <meta property="article:section" content="{{ post.category }}">
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{{ request.url }}">
+    <meta name="twitter:title" content="{{ post.title }}">
+    <meta name="twitter:description" content="{{ post.content[:160]|striptags }}...">
+    {% if post.image_filename %}
+        <meta name="twitter:image" content="{{ url_for('static', filename='images/' + post.image_filename, _external=True) }}">
+    {% endif %}
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="{{ request.url }}">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+    /* Previous styles plus new ones for sharing */
+    
+    /* Share Section Container */
+    .share-section {
+        margin: 50px 0 30px;
+        padding: 30px 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 15px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    .share-section h3 {
+        margin-bottom: 25px;
+        color: #333;
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+    
+    /* Share Buttons Container */
+    .share-buttons {
+        display: flex;
+        gap: 12px;
+        margin: 20px 0;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    /* Individual Share Button */
+    .share-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        border-radius: 50px;
+        color: white;
+        text-decoration: none;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        font-weight: 600;
+        font-size: 0.95rem;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    /* Icon styling */
+    .share-btn i {
+        font-size: 1.2rem;
+        transition: transform 0.3s;
+    }
+    
+    /* Hover effects */
+    .share-btn:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+    }
+    
+    .share-btn:hover i {
+        transform: scale(1.1);
+    }
+    
+    /* Active state */
+    .share-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    
+    /* Brand Colors with hover states */
+    .share-btn.facebook { 
+        background: #1877f2;
+    }
+    .share-btn.facebook:hover { 
+        background: #0d65d9;
+        box-shadow: 0 8px 15px rgba(24, 119, 242, 0.3);
+    }
+    
+    .share-btn.twitter { 
+        background: #1da1f2;
+    }
+    .share-btn.twitter:hover { 
+        background: #0c85d0;
+        box-shadow: 0 8px 15px rgba(29, 161, 242, 0.3);
+    }
+    
+    .share-btn.linkedin { 
+        background: #0077b5;
+    }
+    .share-btn.linkedin:hover { 
+        background: #005e93;
+        box-shadow: 0 8px 15px rgba(0, 119, 181, 0.3);
+    }
+    
+    .share-btn.whatsapp { 
+        background: #25d366;
+    }
+    .share-btn.whatsapp:hover { 
+        background: #1da851;
+        box-shadow: 0 8px 15px rgba(37, 211, 102, 0.3);
+    }
+    
+    .share-btn.reddit { 
+        background: #ff4500;
+    }
+    .share-btn.reddit:hover { 
+        background: #e03d00;
+        box-shadow: 0 8px 15px rgba(255, 69, 0, 0.3);
+    }
+    
+    .share-btn.pinterest { 
+        background: #bd081c;
+    }
+    .share-btn.pinterest:hover { 
+        background: #9c0717;
+        box-shadow: 0 8px 15px rgba(189, 8, 28, 0.3);
+    }
+    
+    .share-btn.email { 
+        background: #6c757d;
+    }
+    .share-btn.email:hover { 
+        background: #5a6268;
+        box-shadow: 0 8px 15px rgba(108, 117, 125, 0.3);
+    }
+    
+    .share-btn.copy { 
+        background: #343a40;
+    }
+    .share-btn.copy:hover { 
+        background: #23272b;
+        box-shadow: 0 8px 15px rgba(52, 58, 64, 0.3);
+    }
+    
+    /* Related Posts Section */
+    .related-posts {
+        margin-top: 60px;
+        padding-top: 40px;
+        border-top: 2px solid #e9ecef;
+    }
+    
+    .related-posts h3 {
+        text-align: center;
+        margin-bottom: 30px;
+        font-size: 1.8rem;
+        color: #333;
+    }
+    
+    .related-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 25px;
+        margin-top: 20px;
+    }
+    
+    .related-card {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    
+    .related-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+    }
+    
+    .related-card img {
+        width: 100%;
+        height: 140px;
+        object-fit: cover;
+        transition: transform 0.5s;
+    }
+    
+    .related-card:hover img {
+        transform: scale(1.05);
+    }
+    
+    .related-card h4 {
+        padding: 15px;
+        margin: 0;
+        font-size: 1rem;
+        line-height: 1.4;
+    }
+    
+    .related-card a {
+        color: #333;
+        text-decoration: none;
+        font-weight: 600;
+        transition: color 0.3s;
+    }
+    
+    .related-card a:hover {
+        color: #667eea;
+    }
+    
+    /* Category badge */
+    .category-badge {
+        display: inline-block;
+        padding: 5px 15px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.3s;
+    }
+    
+    .category-badge:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 10px rgba(102, 126, 234, 0.3);
+    }
+    
+    /* Schema.org hidden */
+    .schema-org {
+        display: none;
+    }
+    
+    /* Back button */
+    .back-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 40px;
+        padding: 12px 25px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        text-decoration: none;
+        border-radius: 50px;
+        font-weight: 600;
+        transition: all 0.3s;
+        box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+    }
+    
+    .back-button i {
+        font-size: 1rem;
+    }
+    
+    .back-button:hover {
+        transform: translateX(-5px);
+        box-shadow: 0 8px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+        .share-section {
+            padding: 20px 15px;
+            margin: 30px 0 20px;
+        }
+        
+        .share-section h3 {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+        }
+        
+        .share-btn {
+            padding: 10px 18px;
+            font-size: 0.85rem;
+        }
+        
+        .share-btn i {
+            font-size: 1rem;
+        }
+        
+        .share-buttons {
+            gap: 8px;
+        }
+        
+        .related-grid {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .related-card h4 {
+            padding: 10px;
+            font-size: 0.9rem;
+        }
+        
+        .back-button {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+        }
+    }
+    
+    /* Small phones */
+    @media (max-width: 480px) {
+        .share-btn {
+            width: calc(50% - 8px);
+            justify-content: center;
+            padding: 10px 12px;
+        }
+        
+        .share-buttons {
+            gap: 8px;
+        }
+        
+        .related-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    /* Animation for share buttons */
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .share-btn {
+        animation: slideIn 0.5s ease forwards;
+        opacity: 0;
+    }
+    
+    /* Stagger animation delay */
+    .share-btn:nth-child(1) { animation-delay: 0.1s; }
+    .share-btn:nth-child(2) { animation-delay: 0.2s; }
+    .share-btn:nth-child(3) { animation-delay: 0.3s; }
+    .share-btn:nth-child(4) { animation-delay: 0.4s; }
+    .share-btn:nth-child(5) { animation-delay: 0.5s; }
+    .share-btn:nth-child(6) { animation-delay: 0.6s; }
+    .share-btn:nth-child(7) { animation-delay: 0.7s; }
+    .share-btn:nth-child(8) { animation-delay: 0.8s; }
+    
+    /* Print styles */
+    @media print {
+        .share-section, .related-posts, .back-button, footer, header {
+            display: none;
+        }
+    }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="container header-content">
+        <h1 class="logo"><a href="{{ url_for('index') }}" style="color: inherit; text-decoration: none;">NextTech<span>Daily</span></a></h1>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                <li><a href="{{ url_for('categories') }}">Categories</a></li>
+                <li><a href="{{ url_for('about') }}">About</a></li>
+                <li><a href="{{ url_for('contact') }}">Contact</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<main class="post-container">
+    <article>
+        <div class="post-header">
+            <h1>{{ post.title }}</h1>
+            <div class="post-meta">
+                <span>📅 {{ post.date }}</span>
+                <span>📁 <a href="{{ url_for('category_posts', category_name=post.category) }}">{{ post.category }}</a></span>
+                <span>👁️ {{ post.views|default(0) }} views</span>
+            </div>
+        </div>
+
+        {% if post.image_filename %}
+            <div class="post-image">
+                <img src="{{ url_for('static', filename='images/' + post.image_filename) }}" 
+                     alt="{{ post.title }}">
+            </div>
+        {% endif %}
+
+        <div class="post-content">
+            {{ post.content | safe }}
+        </div>
+        
+        <!-- Social Share Buttons with Real Icons -->
+        <div class="share-buttons">
+            <h3 style="width: 100%; text-align: center; margin-bottom: 20px;">📢 Share this article</h3>
+    
+            <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.url }}"
+                target="_blank" class="share-btn facebook" title="Share on Facebook">
+                <i class="fab fa-facebook-f"></i> Facebook
+            </a>
+    
+            <a href="https://twitter.com/intent/tweet?url={{ request.url }}&text={{ post.title }}"
+                target="_blank" class="share-btn twitter" title="Share on Twitter">
+                <i class="fab fa-twitter"></i> Twitter
+            </a>
+    
+            <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.url }}"
+                target="_blank" class="share-btn linkedin" title="Share on LinkedIn">
+                <i class="fab fa-linkedin-in"></i> LinkedIn
+            </a>
+    
+            <a href="https://wa.me/?text={{ post.title }}%20{{ request.url }}"
+                target="_blank" class="share-btn whatsapp" title="Share on WhatsApp">
+                <i class="fab fa-whatsapp"></i> WhatsApp
+            </a>
+    
+            <a href="https://www.reddit.com/submit?url={{ request.url }}&title={{ post.title }}"
+                target="_blank" class="share-btn reddit" title="Share on Reddit">
+                <i class="fab fa-reddit-alien"></i> Reddit
+            </a>
+    
+            <a href="https://pinterest.com/pin/create/button/?url={{ request.url }}&description={{ post.title }}"
+                target="_blank" class="share-btn pinterest" title="Share on Pinterest">
+                <i class="fab fa-pinterest-p"></i> Pinterest
+            </a>
+    
+            <a href="mailto:?subject={{ post.title }}&body=Check out this article: {{ request.url }}"
+                target="_blank" class="share-btn email" title="Share via Email">
+                <i class="fas fa-envelope"></i> Email
+            </a>
+    
+            <a href="#" onclick="navigator.clipboard.writeText('{{ request.url }}'); alert('Link copied!'); return false;"
+                class="share-btn copy" title="Copy link">
+                <i class="fas fa-link"></i> Copy Link
+            </a>
+        </div>
+        
+        <!-- Related Posts -->
+        {% if related_posts %}
+            <div class="related-posts">
+                <h3>📚 You Might Also Like</h3>
+                <div class="related-grid">
+                    {% for related in related_posts %}
+                        <div class="related-card">
+                            {% if related.image_filename %}
+                                <img src="{{ url_for('static', filename='images/' + related.image_filename) }}" 
+                                     alt="{{ related.title }}">
+                            {% endif %}
+                            <h4><a href="{{ url_for('post_detail', post_id=related.id) }}">{{ related.title }}</a></h4>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="post-footer">
+            <a href="{{ url_for('index') }}" class="back-button">← Back to Home</a>
+        </div>
+    </article>
+    
+    <!-- Schema.org markup for Google -->
+    <div class="schema-org" itemscope itemtype="http://schema.org/Article">
+        <meta itemprop="headline" content="{{ post.title }}">
+        <meta itemprop="description" content="{{ post.content[:160]|striptags }}">
+        <meta itemprop="datePublished" content="{{ post.date }}">
+        <meta itemprop="author" content="NextTechDaily">
+        <meta itemprop="publisher" content="NextTechDaily">
+        {% if post.image_filename %}
+            <div itemprop="image" itemscope itemtype="https://schema.org/ImageObject">
+                <meta itemprop="url" content="{{ url_for('static', filename='images/' + post.image_filename, _external=True) }}">
+                <meta itemprop="width" content="1200">
+                <meta itemprop="height" content="630">
+            </div>
+        {% endif %}
+    </div>
+</main>
+
+<footer>
+    <p>© 2026 NextTechDaily — Built for developers and learners.</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - NextTechDaily</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* A few extra styles specifically for the reading experience on the About page */
+        .about-wrapper {
+            background-color: var(--card-bg);
+            padding: 50px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 60px;
+            /* Reusing the fadeUp animation from your style.css */
+            animation: fadeUp 0.6s ease-out forwards;
+        }
+
+        .about-wrapper h3 {
+            color: var(--accent-color);
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .about-wrapper p {
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            color: var(--text-main);
+        }
+
+        .about-wrapper ul {
+            margin-left: 20px;
+            margin-bottom: 20px;
+            color: var(--text-main);
+        }
+
+        .about-wrapper li {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container header-content">
+            <h1 class="logo">NextTech<span>Daily</span></h1>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="{{ url_for('index') }}">Home</a></li>
+                    <li><a href="#">Categories</a></li>
+                    <li><a href="{{ url_for('about') }}">About</a></li>
+                    <li><a href="{{ url_for('contact') }}">Contact</a></li>
+                    <!-- Removed login link - access admin manually at /login -->
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <h2>Decoding Tomorrow, Today.</h2>
+            <p>Welcome to the pulse of the future.</p>
+        </section>
+
+        <section class="about-wrapper">
+            <p>Welcome to <strong>NextTechDaily</strong>, your ultimate destination for everything on the bleeding edge of innovation. We believe that technology isn't just a tool; it's the canvas on which the future of humanity is being painted.</p>
+
+            <h3>Our Mission</h3>
+            <p>Our mission is simple: to bridge the gap between complex technological advancements and everyday understanding. Whether it's artificial intelligence, quantum computing, space exploration, or the next iteration of the web, we are here to break it down. We sift through the noise to bring you the signal.</p>
+
+            <h3>What We Cover</h3>
+            <ul>
+                <li><strong>Latest Technology:</strong> Breaking news on hardware, software, and consumer tech that is reshaping how we live and work right now.</li>
+                <li><strong>Future Tech:</strong> Deep dives into emerging trends, from robotics and neural interfaces to sustainable energy solutions that will define the next decade.</li>
+                <li><strong>Industry Insights:</strong> Analysis of the tech giants, ambitious startups, and the visionary minds driving the industry forward.</li>
+            </ul>
+
+            <h3>Join the Journey</h3>
+            <p>Technology moves fast, and keeping up can feel overwhelming. At NextTechDaily, we do the heavy lifting so you don't have to. Subscribe to our newsletter, read our latest articles, and join a community of forward-thinkers who are just as excited about the future as you are.</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 NextTechDaily. All rights reserved.</p>
+    </footer>
+
+</body>
+</html>

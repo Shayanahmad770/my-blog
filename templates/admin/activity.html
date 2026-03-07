@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Activity Log</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .activity-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .activity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .activity-table {
+            width: 100%;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+        }
+        .activity-table th {
+            background: #f8f9fa;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .activity-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .activity-table tr:hover {
+            background: #f5f5f5;
+        }
+        .badge {
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge-login {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-logout {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .badge-create {
+            background: #cce5ff;
+            color: #004085;
+        }
+        .badge-edit {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .badge-delete {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <h1 class="logo">NextTech<span>Daily</span> Admin</h1>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="{{ url_for('admin_dashboard') }}">Dashboard</a></li>
+                    <li><a href="{{ url_for('admin_messages') }}">Messages</a></li>
+                    <li><a href="{{ url_for('admin_activity') }}" class="active">Activity Log</a></li>
+                    <li><a href="{{ url_for('index') }}">View Site</a></li>
+                    <li><a href="{{ url_for('logout') }}">Logout</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    
+    <main class="activity-container">
+        <div class="activity-header">
+            <h1>📋 Admin Activity Log</h1>
+            <p>Last 100 actions</p>
+        </div>
+        
+        <table class="activity-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Admin</th>
+                    <th>Action</th>
+                    <th>Details</th>
+                    <th>IP Address</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for activity in activities %}
+                <tr>
+                    <td>{{ activity.timestamp }}</td>
+                    <td>{{ activity.username }}</td>
+                    <td>
+                        <span class="badge badge-{{ activity.action.lower() }}">
+                            {{ activity.action }}
+                        </span>
+                    </td>
+                    <td>{{ activity.details }}</td>
+                    <td>{{ activity.ip_address }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </main>
+</body>
+</html>

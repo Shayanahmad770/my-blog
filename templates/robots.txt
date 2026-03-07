@@ -1,0 +1,14 @@
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: {{ url_for('sitemap', _external=True) }}
+
+# Disallow admin pages
+Disallow: /admin/
+Disallow: /login
+Disallow: /logout
+
+# Crawl delay
+Crawl-delay: 10

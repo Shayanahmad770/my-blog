@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ category }} - NextTechDaily</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .category-header {
+            text-align: center;
+            margin: var(--space-xl) 0;
+            padding: var(--space-xl) 0;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            border-radius: var(--border-radius);
+            color: white;
+        }
+        
+        .category-header h1 {
+            color: white;
+            font-size: clamp(2rem, 5vw, 3rem);
+            margin-bottom: var(--space-sm);
+        }
+        
+        .category-header p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.2rem;
+        }
+        
+        .post-count-badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1.5rem;
+            border-radius: 30px;
+            margin-top: var(--space-sm);
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+        }
+        
+        .back-to-categories {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            margin-bottom: var(--space-lg);
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+        
+        .back-to-categories:hover {
+            color: var(--primary-color);
+            transform: translateX(-5px);
+        }
+        
+        .no-posts {
+            text-align: center;
+            padding: var(--space-xl);
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            margin: var(--space-xl) 0;
+        }
+        
+        .no-posts p {
+            margin-bottom: var(--space-md);
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="container header-content">
+        <h1 class="logo">NextTech<span>Daily</span></h1>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                <li><a href="{{ url_for('categories') }}">Categories</a></li>
+                <li><a href="{{ url_for('about') }}">About</a></li>
+                <li><a href="{{ url_for('contact') }}">Contact</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<main class="container">
+    <a href="{{ url_for('categories') }}" class="back-to-categories">
+        ← Back to All Categories
+    </a>
+    
+    <div class="category-header">
+        <h1>{{ category }}</h1>
+        <p>Explore all articles in this category</p>
+        <div class="post-count-badge">
+            {{ posts|length }} post{% if posts|length != 1 %}s{% endif %}
+        </div>
+    </div>
+
+    {% if posts %}
+        <section class="blog-grid">
+            {% for post in posts %}
+                <article class="post-preview">
+                    <h2><a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a></h2>
+                    <div class="meta">
+                        <span>📅 {{ post.date[:10] }}</span>
+                        <span>📁 <a href="{{ url_for('category_posts', category_name=post.category) }}">{{ post.category }}</a></span>
+                    </div>
+                    {% if post.image_filename %}
+                        <img src="{{ url_for('static', filename='images/' + post.image_filename) }}" 
+                        alt="{{ post.title }}" class="post-image">
+                    {% endif %}
+    
+                    <!-- FIXED: Use excerpt -->
+                    <p>{{ post.excerpt or post.content|striptags|truncate(150) }}</p>
+    
+                    <a href="{{ url_for('post_detail', post_id=post.id) }}" class="read-more">Read more →</a>
+                </article>   
+            {% endfor %}
+        </section>
+    {% else %}
+        <div class="no-posts">
+            <p>No posts in this category yet.</p>
+            <a href="{{ url_for('index') }}" class="back-button">Browse All Posts</a>
+        </div>
+    {% endif %}
+</main>
+
+<footer>
+    <p>© 2026 NextTechDaily — Built for developers and learners.</p>
+</footer>
+
+</body>
+</html>

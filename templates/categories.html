@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Categories - NextTechDaily</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--space-lg);
+            padding: var(--space-xl) 0;
+        }
+        
+        .category-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: var(--space-lg);
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition);
+            text-align: center;
+            border: 1px solid var(--border-color);
+            animation: fadeUp 0.6s ease-out forwards;
+        }
+        
+        .category-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary-color);
+        }
+        
+        .category-icon {
+            font-size: 3rem;
+            margin-bottom: var(--space-sm);
+        }
+        
+        .category-card h2 {
+            margin-bottom: var(--space-xs);
+            color: var(--text-dark);
+        }
+        
+        .category-card h2 a {
+            color: inherit;
+            text-decoration: none;
+        }
+        
+        .category-card h2 a:hover {
+            color: var(--primary-color);
+        }
+        
+        .post-count {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            color: white;
+            padding: 0.25rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-top: var(--space-xs);
+        }
+        
+        .no-categories {
+            text-align: center;
+            padding: var(--space-xl);
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            grid-column: 1 / -1;
+        }
+        
+        .no-categories p {
+            margin-bottom: var(--space-md);
+        }
+        
+        .browse-all {
+            display: inline-block;
+            padding: var(--space-sm) var(--space-lg);
+            background: var(--primary-color);
+            color: white;
+            border-radius: 30px;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+        
+        .browse-all:hover {
+            background: var(--primary-dark);
+            transform: translateX(5px);
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="container header-content">
+        <h1 class="logo">NextTech<span>Daily</span></h1>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                <li><a href="{{ url_for('categories') }}" class="active">Categories</a></li>
+                <li><a href="{{ url_for('about') }}">About</a></li>
+                <li><a href="{{ url_for('contact') }}">Contact</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<main class="container">
+    <section class="hero">
+        <h2>Explore Categories</h2>
+        <p>Browse articles by topic and find exactly what you're looking for.</p>
+    </section>
+
+    <div class="categories-grid">
+        {% if categories %}
+            {% for category in categories %}
+                <div class="category-card">
+                    <div class="category-icon">
+                        {% set icon = {
+                            'technology': '💻',
+                            'programming': '👨‍💻',
+                            'web development': '🌐',
+                            'ai': '🤖',
+                            'science': '🔬',
+                            'business': '💼',
+                            'design': '🎨',
+                            'tutorial': '📚',
+                            'news': '📰'
+                        } %}
+                        {{ icon.get(category.category.lower(), '📌') }}
+                    </div>
+                    <h2>
+                        <a href="{{ url_for('category_posts', category_name=category.category) }}">
+                            {{ category.category }}
+                        </a>
+                    </h2>
+                    <span class="post-count">
+                        {{ category.post_count }} post{% if category.post_count != 1 %}s{% endif %}
+                    </span>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-categories">
+                <p>No categories yet. Check back soon!</p>
+                <a href="{{ url_for('index') }}" class="browse-all">Browse All Posts →</a>
+            </div>
+        {% endif %}
+    </div>
+</main>
+
+<footer>
+    <p>© 2026 NextTechDaily — Built for developers and learners.</p>
+</footer>
+
+</body>
+</html>
