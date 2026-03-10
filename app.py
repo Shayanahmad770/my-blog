@@ -8,6 +8,10 @@ from flask import Flask, render_template, request, redirect, url_for, session, g
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import requests
+from dotenv import load_dotenv  # NEW: Added for .env file support
+
+# Load environment variables from .env file (for local development)
+load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -19,15 +23,39 @@ app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', os.path.join(basedir, 'static', 'images'))
 
-# Database configuration for production - Use Render's persistent disk if available
-if os.environ.get('RENDER'):
-    # On Render, use persistent disk
-    database_path = '/data/blog.db'
-    # Ensure the directory exists
-    os.makedirs('/data', exist_ok=True)
+# NEW: Database configuration for PostgreSQL
+# Check if we're using PostgreSQL (DATABASE_URL environment variable exists)
+if os.environ.get('DATABASE_URL'):
+    # Use PostgreSQL for production (Supabase, Heroku, Render)
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    # Fix for Heroku's older postgres:// format
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    
+    # Import PostgreSQL modules only when needed
+    import psycopg2
+    from psycopg2 import pool
+    from psycopg2.extras import RealDictCursor
+    
+    # Create a connection pool for PostgreSQL
+    app.config['POSTGRESQL_POOL'] = psycopg2.pool.SimpleConnectionPool(
+        1, 20,  # min connection, max connection
+        dsn=DATABASE_URL,
+        cursor_factory=RealDictCursor
+    )
+    app.config['USING_POSTGRESQL'] = True
+    print("Using PostgreSQL database")
 else:
-    # Local development
-    database_path = os.path.join(basedir, 'database', 'blog.db')
+    # Fallback to SQLite for local development
+    app.config['USING_POSTGRESQL'] = False
+    if os.environ.get('RENDER'):
+        # On Render, use persistent disk
+        database_path = '/data/blog.db'
+        os.makedirs('/data', exist_ok=True)
+    else:
+        # Local development
+        database_path = os.path.join(basedir, 'database', 'blog.db')
+    print("Using SQLite database")
 
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'  # Set to True in production with HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -116,20 +144,33 @@ def is_password_strong(password):
 # ─── Database Helpers ──────────────────────────────────────────────
 def get_db():
     """Open a new database connection per request."""
-    db = getattr(g, '_database', None)
-    if db is None:
-        # Ensure database directory exists
-        os.makedirs(os.path.dirname(database_path), exist_ok=True)
-        db = g._database = sqlite3.connect(database_path)
-        db.row_factory = sqlite3.Row   # allows accessing columns by name
-    return db
+    if app.config['USING_POSTGRESQL']:
+        # PostgreSQL connection from pool
+        db = getattr(g, '_database', None)
+        if db is None:
+            db = g._database = app.config['POSTGRESQL_POOL'].getconn()
+        return db
+    else:
+        # SQLite connection
+        db = getattr(g, '_database', None)
+        if db is None:
+            # Ensure database directory exists
+            os.makedirs(os.path.dirname(database_path), exist_ok=True)
+            db = g._database = sqlite3.connect(database_path)
+            db.row_factory = sqlite3.Row   # allows accessing columns by name
+        return db
 
 @app.teardown_appcontext
 def close_connection(exception):
     """Close the database connection at the end of the request."""
     db = getattr(g, '_database', None)
     if db is not None:
-        db.close()
+        if app.config['USING_POSTGRESQL']:
+            # Return PostgreSQL connection to pool
+            app.config['POSTGRESQL_POOL'].putconn(db)
+        else:
+            # Close SQLite connection
+            db.close()
 
 def init_db():
     """Create tables and default admin user if they don't exist."""
@@ -140,7 +181,7 @@ def init_db():
         # Create posts table with views column and excerpt column
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS posts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 title TEXT NOT NULL,
                 content TEXT NOT NULL,
                 excerpt TEXT,
@@ -154,7 +195,7 @@ def init_db():
         # Create users table with more fields
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 email TEXT,
@@ -169,7 +210,7 @@ def init_db():
         # Create admin activity log table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS admin_activity (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_id INTEGER,
                 action TEXT NOT NULL,
                 details TEXT,
@@ -182,7 +223,7 @@ def init_db():
         # Create contact_messages table with location fields
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS contact_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
                 email TEXT NOT NULL,
                 message TEXT NOT NULL,
@@ -202,7 +243,7 @@ def init_db():
         # Create password reset tokens table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 token TEXT NOT NULL,
                 expires_at TIMESTAMP NOT NULL,
@@ -213,14 +254,18 @@ def init_db():
 
         db.commit()
 
-        # Create a default admin user if none exists (username: admin, password: Admin@123)
-        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+        # Check if admin user exists (handle both SQLite and PostgreSQL syntax)
+        if app.config['USING_POSTGRESQL']:
+            cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+        else:
+            cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+            
         if cursor.fetchone() is None:
             default_password = "Admin@123"  # Strong default password
             password_hash = generate_password_hash(default_password)
             cursor.execute('''
                 INSERT INTO users (username, password_hash, email, created_at)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             ''', ('admin', password_hash, 'admin@nexttechdaily.com', datetime.now()))
             db.commit()
             print("="*50)
@@ -239,10 +284,18 @@ def log_admin_activity(action, details=""):
     if 'user_id' in session:
         db = get_db()
         ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
-        db.execute('''
-            INSERT INTO admin_activity (user_id, action, details, ip_address)
-            VALUES (?, ?, ?, ?)
-        ''', (session['user_id'], action, details, ip_address))
+        
+        if app.config['USING_POSTGRESQL']:
+            db.execute('''
+                INSERT INTO admin_activity (user_id, action, details, ip_address)
+                VALUES (%s, %s, %s, %s)
+            ''', (session['user_id'], action, details, ip_address))
+        else:
+            db.execute('''
+                INSERT INTO admin_activity (user_id, action, details, ip_address)
+                VALUES (?, ?, ?, ?)
+            ''', (session['user_id'], action, details, ip_address))
+            
         db.commit()
 
 # ─── Enhanced Login Required Decorator ─────────────────────────────
@@ -277,7 +330,10 @@ def login_required(view):
 def index():
     """Homepage: display all blog posts."""
     db = get_db()
-    posts = db.execute('SELECT * FROM posts ORDER BY date DESC').fetchall()
+    if app.config['USING_POSTGRESQL']:
+        posts = db.execute('SELECT * FROM posts ORDER BY date DESC').fetchall()
+    else:
+        posts = db.execute('SELECT * FROM posts ORDER BY date DESC').fetchall()
     return render_template('blog.html', posts=posts)
 
 @app.route('/post/<int:post_id>')
@@ -285,21 +341,36 @@ def index():
 def post_detail(post_id, slug=None):
     """Full article page for a single post with SEO-friendly URL."""
     db = get_db()
-    post = db.execute('SELECT * FROM posts WHERE id = ?', (post_id,)).fetchone()
+    if app.config['USING_POSTGRESQL']:
+        post = db.execute('SELECT * FROM posts WHERE id = %s', (post_id,)).fetchone()
+    else:
+        post = db.execute('SELECT * FROM posts WHERE id = ?', (post_id,)).fetchone()
+        
     if post is None:
         abort(404)
     
     # Increment view count
-    db.execute('UPDATE posts SET views = views + 1 WHERE id = ?', (post_id,))
+    if app.config['USING_POSTGRESQL']:
+        db.execute('UPDATE posts SET views = views + 1 WHERE id = %s', (post_id,))
+    else:
+        db.execute('UPDATE posts SET views = views + 1 WHERE id = ?', (post_id,))
     db.commit()
     
     # Get related posts (same category)
-    related_posts = db.execute('''
-        SELECT * FROM posts 
-        WHERE category = ? AND id != ? 
-        ORDER BY date DESC 
-        LIMIT 3
-    ''', (post['category'], post_id)).fetchall()
+    if app.config['USING_POSTGRESQL']:
+        related_posts = db.execute('''
+            SELECT * FROM posts 
+            WHERE category = %s AND id != %s 
+            ORDER BY date DESC 
+            LIMIT 3
+        ''', (post['category'], post_id)).fetchall()
+    else:
+        related_posts = db.execute('''
+            SELECT * FROM posts 
+            WHERE category = ? AND id != ? 
+            ORDER BY date DESC 
+            LIMIT 3
+        ''', (post['category'], post_id)).fetchall()
     
     return render_template('post.html', post=post, related_posts=related_posts)
 
@@ -334,13 +405,22 @@ def contact():
         
         # Save to database
         db = get_db()
-        db.execute('''
-            INSERT INTO contact_messages 
-            (name, email, message, ip_address, user_agent, city, region, country, isp, lat, lon) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (name, email, message, ip_address, user_agent, 
-              location['city'], location['region'], location['country'], 
-              location['isp'], location['lat'], location['lon']))
+        if app.config['USING_POSTGRESQL']:
+            db.execute('''
+                INSERT INTO contact_messages 
+                (name, email, message, ip_address, user_agent, city, region, country, isp, lat, lon) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (name, email, message, ip_address, user_agent, 
+                  location['city'], location['region'], location['country'], 
+                  location['isp'], location['lat'], location['lon']))
+        else:
+            db.execute('''
+                INSERT INTO contact_messages 
+                (name, email, message, ip_address, user_agent, city, region, country, isp, lat, lon) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (name, email, message, ip_address, user_agent, 
+                  location['city'], location['region'], location['country'], 
+                  location['isp'], location['lat'], location['lon']))
         db.commit()
         
         flash('Thank you for your message! We\'ll get back to you soon.', 'success')
@@ -352,23 +432,38 @@ def contact():
 def categories():
     """Show all categories and post counts."""
     db = get_db()
-    categories = db.execute('''
-        SELECT category, COUNT(*) as post_count 
-        FROM posts 
-        GROUP BY category 
-        ORDER BY category
-    ''').fetchall()
+    if app.config['USING_POSTGRESQL']:
+        categories = db.execute('''
+            SELECT category, COUNT(*) as post_count 
+            FROM posts 
+            GROUP BY category 
+            ORDER BY category
+        ''').fetchall()
+    else:
+        categories = db.execute('''
+            SELECT category, COUNT(*) as post_count 
+            FROM posts 
+            GROUP BY category 
+            ORDER BY category
+        ''').fetchall()
     return render_template('categories.html', categories=categories)
 
 @app.route('/category/<category_name>')
 def category_posts(category_name):
     """Show all posts in a specific category."""
     db = get_db()
-    posts = db.execute('''
-        SELECT * FROM posts 
-        WHERE category = ? 
-        ORDER BY date DESC
-    ''', (category_name,)).fetchall()
+    if app.config['USING_POSTGRESQL']:
+        posts = db.execute('''
+            SELECT * FROM posts 
+            WHERE category = %s 
+            ORDER BY date DESC
+        ''', (category_name,)).fetchall()
+    else:
+        posts = db.execute('''
+            SELECT * FROM posts 
+            WHERE category = ? 
+            ORDER BY date DESC
+        ''', (category_name,)).fetchall()
     return render_template('category_posts.html', category=category_name, posts=posts)
 
 # ─── SEO Routes ────────────────────────────────────────────────────
@@ -376,7 +471,10 @@ def category_posts(category_name):
 def sitemap():
     """Generate sitemap.xml for search engines."""
     db = get_db()
-    posts = db.execute('SELECT * FROM posts ORDER BY date DESC').fetchall()
+    if app.config['USING_POSTGRESQL']:
+        posts = db.execute('SELECT * FROM posts ORDER BY date DESC').fetchall()
+    else:
+        posts = db.execute('SELECT * FROM posts ORDER BY date DESC').fetchall()
     
     sitemap_xml = render_template('sitemap.xml', posts=posts)
     return app.response_class(response=sitemap_xml, status=200, mimetype='application/xml')
@@ -398,7 +496,10 @@ def login():
         db = get_db()
         
         # Check if user is locked out
-        user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        if app.config['USING_POSTGRESQL']:
+            user = db.execute('SELECT * FROM users WHERE username = %s', (username,)).fetchone()
+        else:
+            user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         
         if user and user['locked_until']:
             try:
@@ -409,14 +510,21 @@ def login():
                     return render_template('admin/login.html')
             except (ValueError, TypeError):
                 # If locked_until is invalid, clear it
-                db.execute('UPDATE users SET locked_until = NULL WHERE id = ?', (user['id'],))
+                if app.config['USING_POSTGRESQL']:
+                    db.execute('UPDATE users SET locked_until = NULL WHERE id = %s', (user['id'],))
+                else:
+                    db.execute('UPDATE users SET locked_until = NULL WHERE id = ?', (user['id'],))
                 db.commit()
         
         # Verify credentials
         if user and check_password_hash(user['password_hash'], password):
             # Reset failed attempts on successful login
-            db.execute('UPDATE users SET failed_attempts = 0, locked_until = NULL, last_login = ?, last_login_ip = ? WHERE id = ?',
-                      (datetime.now(), ip_address, user['id']))
+            if app.config['USING_POSTGRESQL']:
+                db.execute('UPDATE users SET failed_attempts = 0, locked_until = NULL, last_login = %s, last_login_ip = %s WHERE id = %s',
+                          (datetime.now(), ip_address, user['id']))
+            else:
+                db.execute('UPDATE users SET failed_attempts = 0, locked_until = NULL, last_login = ?, last_login_ip = ? WHERE id = ?',
+                          (datetime.now(), ip_address, user['id']))
             db.commit()
             
             session.clear()
@@ -440,12 +548,20 @@ def login():
                 failed = user['failed_attempts'] + 1
                 if failed >= 5:  # Lock after 5 failed attempts
                     lock_time = datetime.now() + timedelta(minutes=15)
-                    db.execute('UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?',
-                              (failed, lock_time.isoformat(), user['id']))
+                    if app.config['USING_POSTGRESQL']:
+                        db.execute('UPDATE users SET failed_attempts = %s, locked_until = %s WHERE id = %s',
+                                  (failed, lock_time.isoformat(), user['id']))
+                    else:
+                        db.execute('UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?',
+                                  (failed, lock_time.isoformat(), user['id']))
                     flash('Too many failed attempts. Account locked for 15 minutes.', 'error')
                 else:
-                    db.execute('UPDATE users SET failed_attempts = ? WHERE id = ?',
-                              (failed, user['id']))
+                    if app.config['USING_POSTGRESQL']:
+                        db.execute('UPDATE users SET failed_attempts = %s WHERE id = %s',
+                                  (failed, user['id']))
+                    else:
+                        db.execute('UPDATE users SET failed_attempts = ? WHERE id = ?',
+                                  (failed, user['id']))
                     flash(f'Invalid credentials. {5-failed} attempts remaining.', 'error')
                 db.commit()
                 
@@ -473,7 +589,10 @@ def change_password():
         confirm = request.form['confirm_password']
         
         db = get_db()
-        user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if app.config['USING_POSTGRESQL']:
+            user = db.execute('SELECT * FROM users WHERE id = %s', (session['user_id'],)).fetchone()
+        else:
+            user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         
         # Verify current password
         if not check_password_hash(user['password_hash'], current):
@@ -493,7 +612,10 @@ def change_password():
         
         # Update password
         new_hash = generate_password_hash(new)
-        db.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, session['user_id']))
+        if app.config['USING_POSTGRESQL']:
+            db.execute('UPDATE users SET password_hash = %s WHERE id = %s', (new_hash, session['user_id']))
+        else:
+            db.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, session['user_id']))
         db.commit()
         
         log_admin_activity('PASSWORD_CHANGE', 'Password changed successfully')
@@ -507,13 +629,22 @@ def change_password():
 def admin_activity():
     """View admin activity log."""
     db = get_db()
-    activities = db.execute('''
-        SELECT a.*, u.username 
-        FROM admin_activity a
-        JOIN users u ON a.user_id = u.id
-        ORDER BY a.timestamp DESC
-        LIMIT 100
-    ''').fetchall()
+    if app.config['USING_POSTGRESQL']:
+        activities = db.execute('''
+            SELECT a.*, u.username 
+            FROM admin_activity a
+            JOIN users u ON a.user_id = u.id
+            ORDER BY a.timestamp DESC
+            LIMIT 100
+        ''').fetchall()
+    else:
+        activities = db.execute('''
+            SELECT a.*, u.username 
+            FROM admin_activity a
+            JOIN users u ON a.user_id = u.id
+            ORDER BY a.timestamp DESC
+            LIMIT 100
+        ''').fetchall()
     return render_template('admin/activity.html', activities=activities)
 
 @app.route('/admin')
@@ -521,13 +652,14 @@ def admin_activity():
 def admin_dashboard():
     """Admin dashboard: list all posts with edit/delete options."""
     db = get_db()
-    posts = db.execute('SELECT * FROM posts ORDER BY date DESC').fetchall()
-    
-    # Get unread messages count for notification
-    unread_count = db.execute('SELECT COUNT(*) FROM contact_messages WHERE is_read = 0').fetchone()[0]
-    
-    # Get user info for security card
-    user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    if app.config['USING_POSTGRESQL']:
+        posts = db.execute('SELECT * FROM posts ORDER BY date DESC').fetchall()
+        unread_count = db.execute('SELECT COUNT(*) FROM contact_messages WHERE is_read = 0').fetchone()[0]
+        user = db.execute('SELECT * FROM users WHERE id = %s', (session['user_id'],)).fetchone()
+    else:
+        posts = db.execute('SELECT * FROM posts ORDER BY date DESC').fetchall()
+        unread_count = db.execute('SELECT COUNT(*) FROM contact_messages WHERE is_read = 0').fetchone()[0]
+        user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     
     return render_template('admin/dashboard.html', posts=posts, unread_count=unread_count, user=user)
 
@@ -554,10 +686,16 @@ def create_post():
             image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
         db = get_db()
-        db.execute('''
-            INSERT INTO posts (title, content, excerpt, category, image_filename)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (title, content, excerpt, category, filename))
+        if app.config['USING_POSTGRESQL']:
+            db.execute('''
+                INSERT INTO posts (title, content, excerpt, category, image_filename)
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (title, content, excerpt, category, filename))
+        else:
+            db.execute('''
+                INSERT INTO posts (title, content, excerpt, category, image_filename)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (title, content, excerpt, category, filename))
         db.commit()
         
         log_admin_activity('CREATE_POST', f'Created post: {title}')
@@ -571,7 +709,11 @@ def create_post():
 def edit_post(post_id):
     """Edit an existing blog post with excerpt."""
     db = get_db()
-    post = db.execute('SELECT * FROM posts WHERE id = ?', (post_id,)).fetchone()
+    if app.config['USING_POSTGRESQL']:
+        post = db.execute('SELECT * FROM posts WHERE id = %s', (post_id,)).fetchone()
+    else:
+        post = db.execute('SELECT * FROM posts WHERE id = ?', (post_id,)).fetchone()
+        
     if post is None:
         abort(404)
 
@@ -601,11 +743,18 @@ def edit_post(post_id):
             filename = secure_filename(image.filename)
             image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-        db.execute('''
-            UPDATE posts
-            SET title = ?, content = ?, excerpt = ?, category = ?, image_filename = ?
-            WHERE id = ?
-        ''', (title, content, excerpt, category, filename, post_id))
+        if app.config['USING_POSTGRESQL']:
+            db.execute('''
+                UPDATE posts
+                SET title = %s, content = %s, excerpt = %s, category = %s, image_filename = %s
+                WHERE id = %s
+            ''', (title, content, excerpt, category, filename, post_id))
+        else:
+            db.execute('''
+                UPDATE posts
+                SET title = ?, content = ?, excerpt = ?, category = ?, image_filename = ?
+                WHERE id = ?
+            ''', (title, content, excerpt, category, filename, post_id))
         db.commit()
         
         log_admin_activity('EDIT_POST', f'Edited post: {title}')
@@ -620,7 +769,11 @@ def delete_post(post_id):
     """Delete a blog post."""
     db = get_db()
     # Get post title for logging
-    post = db.execute('SELECT title, image_filename FROM posts WHERE id = ?', (post_id,)).fetchone()
+    if app.config['USING_POSTGRESQL']:
+        post = db.execute('SELECT title, image_filename FROM posts WHERE id = %s', (post_id,)).fetchone()
+    else:
+        post = db.execute('SELECT title, image_filename FROM posts WHERE id = ?', (post_id,)).fetchone()
+        
     if post:
         # Delete image if exists
         if post['image_filename']:
@@ -631,7 +784,10 @@ def delete_post(post_id):
             except OSError:
                 pass
         
-        db.execute('DELETE FROM posts WHERE id = ?', (post_id,))
+        if app.config['USING_POSTGRESQL']:
+            db.execute('DELETE FROM posts WHERE id = %s', (post_id,))
+        else:
+            db.execute('DELETE FROM posts WHERE id = ?', (post_id,))
         db.commit()
         
         log_admin_activity('DELETE_POST', f'Deleted post: {post["title"]}')
@@ -645,14 +801,20 @@ def delete_post(post_id):
 def admin_messages():
     """Show all contact messages."""
     db = get_db()
-    messages = db.execute('''
-        SELECT * FROM contact_messages 
-        ORDER BY is_read ASC, date DESC
-    ''').fetchall()
-    
-    # Get counts
-    unread_count = db.execute('SELECT COUNT(*) FROM contact_messages WHERE is_read = 0').fetchone()[0]
-    total_count = db.execute('SELECT COUNT(*) FROM contact_messages').fetchone()[0]
+    if app.config['USING_POSTGRESQL']:
+        messages = db.execute('''
+            SELECT * FROM contact_messages 
+            ORDER BY is_read ASC, date DESC
+        ''').fetchall()
+        unread_count = db.execute('SELECT COUNT(*) FROM contact_messages WHERE is_read = 0').fetchone()[0]
+        total_count = db.execute('SELECT COUNT(*) FROM contact_messages').fetchone()[0]
+    else:
+        messages = db.execute('''
+            SELECT * FROM contact_messages 
+            ORDER BY is_read ASC, date DESC
+        ''').fetchall()
+        unread_count = db.execute('SELECT COUNT(*) FROM contact_messages WHERE is_read = 0').fetchone()[0]
+        total_count = db.execute('SELECT COUNT(*) FROM contact_messages').fetchone()[0]
     
     return render_template('admin/messages.html', 
                           messages=messages, 
@@ -666,11 +828,17 @@ def view_message(message_id):
     db = get_db()
     
     # Mark as read
-    db.execute('UPDATE contact_messages SET is_read = 1 WHERE id = ?', (message_id,))
+    if app.config['USING_POSTGRESQL']:
+        db.execute('UPDATE contact_messages SET is_read = 1 WHERE id = %s', (message_id,))
+    else:
+        db.execute('UPDATE contact_messages SET is_read = 1 WHERE id = ?', (message_id,))
     db.commit()
     
     # Get message
-    message = db.execute('SELECT * FROM contact_messages WHERE id = ?', (message_id,)).fetchone()
+    if app.config['USING_POSTGRESQL']:
+        message = db.execute('SELECT * FROM contact_messages WHERE id = %s', (message_id,)).fetchone()
+    else:
+        message = db.execute('SELECT * FROM contact_messages WHERE id = ?', (message_id,)).fetchone()
     
     if message is None:
         abort(404)
@@ -682,7 +850,10 @@ def view_message(message_id):
 def delete_message(message_id):
     """Delete a message."""
     db = get_db()
-    db.execute('DELETE FROM contact_messages WHERE id = ?', (message_id,))
+    if app.config['USING_POSTGRESQL']:
+        db.execute('DELETE FROM contact_messages WHERE id = %s', (message_id,))
+    else:
+        db.execute('DELETE FROM contact_messages WHERE id = ?', (message_id,))
     db.commit()
     
     log_admin_activity('DELETE_MESSAGE', f'Deleted message ID: {message_id}')
@@ -694,7 +865,10 @@ def delete_message(message_id):
 def mark_all_read():
     """Mark all messages as read."""
     db = get_db()
-    db.execute('UPDATE contact_messages SET is_read = 1 WHERE is_read = 0')
+    if app.config['USING_POSTGRESQL']:
+        db.execute('UPDATE contact_messages SET is_read = 1 WHERE is_read = 0')
+    else:
+        db.execute('UPDATE contact_messages SET is_read = 1 WHERE is_read = 0')
     db.commit()
     
     log_admin_activity('MARK_ALL_READ', 'Marked all messages as read')
@@ -706,8 +880,9 @@ if __name__ == '__main__':
     # Create the upload folder if it doesn't exist
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     
-    # Create database directory if it doesn't exist
-    os.makedirs(os.path.dirname(database_path), exist_ok=True)
+    if not app.config['USING_POSTGRESQL']:
+        # Create database directory if it doesn't exist (SQLite only)
+        os.makedirs(os.path.dirname(database_path), exist_ok=True)
     
     # Get port from environment variable for Render
     port = int(os.environ.get('PORT', 5000))

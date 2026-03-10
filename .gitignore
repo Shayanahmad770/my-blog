@@ -20,3 +20,7 @@ static/images/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+blog.log  
